@@ -17,6 +17,8 @@ let ownerAccount: Account
 let newOwnerAddress: bigint
 let newOwnerAccount: Account
 
+let ownerDiff: boolean = false
+
 before(async () => {
     const contractFactory: StarknetContractFactory =
         await starknet.getContractFactory('oracle.cairo')
@@ -49,6 +51,16 @@ before(async () => {
     contract = await contractFactory.deploy(args)
 })
 
+beforeEach(async () => {
+    if (ownerDiff) {
+        const args: StringMap = {
+            new_owner: ownerAddress,
+        }
+        await newOwnerAccount.invoke(contract, 'update_owner', args)
+        ownerDiff = false
+    }
+})
+
 describe('#view_owner', () => {
     it('should return the owner', async () => {
         const args: StringMap = {}
@@ -73,9 +85,7 @@ describe('#update_owner', () => {
 
     it('should fail with only current owner can update', async () => {
         const args: StringMap = {
-            new_owner: BigInt(
-                '0x7367e8bbc2b0065ac566e1785b7480ce74d27cb360dabaf5c558deab7a2bb05'
-            ),
+            new_owner: newOwnerAddress,
         }
         try {
             await newOwnerAccount.invoke(contract, 'update_owner', args)
@@ -86,12 +96,90 @@ describe('#update_owner', () => {
 
     it('should pass and update contract owner', async () => {
         const args: StringMap = {
-            new_owner: BigInt(
-                '0x7367e8bbc2b0065ac566e1785b7480ce74d27cb360dabaf5c558deab7a2bb05'
-            ),
+            new_owner: newOwnerAddress,
         }
-        await ownerAccount.invoke(contract, 'update_owner', args)
+        const txHash = await ownerAccount.invoke(contract, 'update_owner', args)
+        const receipt = await starknet.getTransactionReceipt(txHash)
+        const events = await contract.decodeEvents(receipt.events)
+        expect(events).to.deep.equal([
+            {
+                name: 'OwnerUpdate',
+                data: {
+                    owner: newOwnerAddress,
+                },
+            },
+        ])
+
         const resp = await contract.call('view_owner')
         expect(resp.owner).to.equal(newOwnerAddress)
+        ownerDiff = true
+    })
+})
+
+describe('#get_measurement', () => {
+    it('should return an empty measurement', async () => {
+        const args: StringMap = {
+            key: BigInt(1),
+        }
+        const resp = await contract.call('get_measurement', args)
+        expect(resp.measurement.value).to.equal(0n)
+        expect(resp.measurement.timestamp).to.equal(0n)
+    })
+})
+
+describe('#set_measurement', () => {
+    it('should fail with only current owner can update', async () => {
+        const args: StringMap = {
+            key: BigInt(1),
+            measurement: {
+                value: BigInt(12345),
+                timestamp: BigInt(11111),
+            },
+        }
+        try {
+            const resp = await newOwnerAccount.invoke(
+                contract,
+                'set_measurement',
+                args
+            )
+        } catch (error: any) {
+            expect(error.message).to.contain('only current owner can update')
+        }
+    })
+
+    it('should pass, update measurement and emit MeasurementUpdate', async () => {
+        const args: StringMap = {
+            key: BigInt(1),
+            measurement: {
+                value: BigInt(12345),
+                timestamp: BigInt(11111),
+            },
+        }
+        const txHash = await ownerAccount.invoke(
+            contract,
+            'set_measurement',
+            args
+        )
+        const receipt = await starknet.getTransactionReceipt(txHash)
+        const events = await contract.decodeEvents(receipt.events)
+        expect(events).to.deep.equal([
+            {
+                name: 'MeasurementUpdate',
+                data: {
+                    key: 1n,
+                    measurement: {
+                        value: 12345n,
+                        timestamp: 11111n,
+                    },
+                },
+            },
+        ])
+
+        const a: StringMap = {
+            key: BigInt(1),
+        }
+        const resp = await contract.call('get_measurement', a)
+        expect(resp.measurement.value).to.equal(12345n)
+        expect(resp.measurement.timestamp).to.equal(11111n)
     })
 })
