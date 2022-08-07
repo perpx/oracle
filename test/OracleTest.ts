@@ -23,30 +23,16 @@ before(async () => {
     const contractFactory: StarknetContractFactory =
         await starknet.getContractFactory('oracle.cairo')
     // Owner Account
-    const add =
-        '0x18986dd1cbceaa12be8d66da46a99146c6db79ff964a716ec556a8a9659be35'
-    const key = '0x9d8d3ba9345f6d9c2c4c94040a50a9bf'
-    ownerAddress = BigInt(add)
-    ownerAccount = await starknet.getAccountFromAddress(
-        add,
-        key,
-        'OpenZeppelin'
-    )
+    ownerAccount = await starknet.deployAccount('OpenZeppelin')
+    ownerAddress = BigInt(ownerAccount.address)
 
     // New owner account
-    const newAdd =
-        '0x7367e8bbc2b0065ac566e1785b7480ce74d27cb360dabaf5c558deab7a2bb05'
-    const newKey = '0xf93d163196bc5d67fa24da4ebaf84eb'
-    newOwnerAddress = BigInt(newAdd)
-    newOwnerAccount = await starknet.getAccountFromAddress(
-        newAdd,
-        newKey,
-        'OpenZeppelin'
-    )
+    newOwnerAccount = await starknet.deployAccount('OpenZeppelin')
+    newOwnerAddress = BigInt(newOwnerAccount.address)
 
     // Deploy
     const args: StringMap = {
-        address: ownerAddress,
+        owner: ownerAddress,
     }
     contract = await contractFactory.deploy(args)
 })
@@ -94,7 +80,7 @@ describe('#update_owner', () => {
         }
     })
 
-    it('should pass and update contract owner', async () => {
+    it('should pass, update contract owner and emit ownership_transferred', async () => {
         const args: StringMap = {
             new_owner: newOwnerAddress,
         }
@@ -103,7 +89,7 @@ describe('#update_owner', () => {
         const events = await contract.decodeEvents(receipt.events)
         expect(events).to.deep.equal([
             {
-                name: 'OwnerUpdate',
+                name: 'ownership_transferred',
                 data: {
                     owner: newOwnerAddress,
                 },
@@ -164,7 +150,7 @@ describe('#set_measurement', () => {
         const events = await contract.decodeEvents(receipt.events)
         expect(events).to.deep.equal([
             {
-                name: 'MeasurementUpdate',
+                name: 'measurement_update',
                 data: {
                     key: 1n,
                     measurement: {
