@@ -3,6 +3,7 @@
 from starkware.cairo.common.cairo_builtins import HashBuiltin
 from starkware.cairo.common.math import assert_not_zero
 from starkware.starknet.common.syscalls import get_caller_address
+from contracts.utils import only_owner, init_owner, transfer_ownership, get_owner
 
 # @title Oracle
 # @notice Fast oracle contract used to get crypto price updates
@@ -21,11 +22,11 @@ end
 #
 
 @event
-func OwnerUpdate(owner : felt):
+func ownership_transfer_requested(to : felt):
 end
 
 @event
-func MeasurementUpdate(key : felt, measurement : Info):
+func measurement_update(key : felt, measurement : Info):
 end
 
 #
@@ -36,27 +37,23 @@ end
 func oracle_measurement(key : felt) -> (measurement : Info):
 end
 
-@storage_var
-func oracle_owner() -> (owner : felt):
-end
-
 #
 # Functions
 #
 
 @constructor
-func constructor{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(address : felt):
-    oracle_owner.write(address)
+func constructor{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(owner : felt):
+    init_owner(owner)
     return ()
 end
 
-# @notice Get the contract owner
+# @notice View the contract owner
 # @return owner The contract owner
 @view
 func view_owner{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}() -> (
     owner : felt
 ):
-    let (owner) = oracle_owner.read()
+    let (owner) = get_owner()
     return (owner)
 end
 
@@ -66,19 +63,7 @@ end
 func update_owner{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     new_owner : felt
 ) -> ():
-    with_attr error_message("new owner cannot be the zero address"):
-        assert_not_zero(new_owner)
-    end
-
-    let (caller) = get_caller_address()
-    let (owner) = oracle_owner.read()
-    with_attr error_message("only current owner can update"):
-        assert caller = owner
-    end
-
-    oracle_owner.write(new_owner)
-
-    OwnerUpdate.emit(new_owner)
+    transfer_ownership(new_owner)
     return ()
 end
 
@@ -100,14 +85,10 @@ end
 func set_measurement{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     key : felt, measurement : Info
 ) -> ():
-    let (caller) = get_caller_address()
-    let (owner) = oracle_owner.read()
-    with_attr error_message("only current owner can update"):
-        assert caller = owner
-    end
+    only_owner()
 
     oracle_measurement.write(key, measurement)
 
-    MeasurementUpdate.emit(key, measurement)
+    measurement_update.emit(key, measurement)
     return ()
 end
