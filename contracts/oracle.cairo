@@ -65,7 +65,7 @@ func view_owner{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_pt
 end
 
 # @notice Allows contract owner to begin transfer of contract ownership
-# @dev Only contract owner can update
+# @dev Only callable by contract owner
 # @param new_owner The proposed new contract owner
 @external
 func transfer_ownership{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
@@ -76,7 +76,7 @@ func transfer_ownership{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_
 end
 
 # @notice Allows the contract ownership recipient to accept the transfer
-# @dev Only pending owner contract owner can call
+# @dev Only callable by pending contract owner
 @external
 func accept_ownership{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}() -> ():
     _accept_ownership()
@@ -95,6 +95,7 @@ func get_measurement{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_che
 end
 
 # @notice Update measurement
+# @dev Only callable by contract owner
 # @param key The key of the measurement
 # @param measurement The measurement
 @external
