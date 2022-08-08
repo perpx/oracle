@@ -42,7 +42,8 @@ beforeEach(async () => {
         const args: StringMap = {
             new_owner: ownerAddress,
         }
-        await newOwnerAccount.invoke(contract, 'update_owner', args)
+        await newOwnerAccount.invoke(contract, 'transfer_ownership', args)
+        await ownerAccount.invoke(contract, 'accept_ownership')
         ownerDiff = false
     }
 })
@@ -55,13 +56,14 @@ describe('#view_owner', () => {
     })
 })
 
-describe('#update_owner', () => {
+describe('#transfer_ownership', () => {
     it('should fail with new owner cannot be zero address', async () => {
         const args: StringMap = {
             new_owner: BigInt(0),
         }
         try {
-            await contract.invoke('update_owner', args)
+            await contract.invoke('transfer_ownership', args)
+            expect.fail('should have failed')
         } catch (error: any) {
             expect(error.message).to.contain(
                 'new owner cannot be the zero address'
@@ -74,28 +76,63 @@ describe('#update_owner', () => {
             new_owner: newOwnerAddress,
         }
         try {
-            await newOwnerAccount.invoke(contract, 'update_owner', args)
+            await newOwnerAccount.invoke(contract, 'transfer_ownership', args)
+            expect.fail('should have failed')
         } catch (error: any) {
             expect(error.message).to.contain('only current owner can update')
         }
     })
 
-    it('should pass, update contract owner and emit ownership_transferred', async () => {
+    it('should pass, update pending contract owner and emit ownership_transfer_requested', async () => {
         const args: StringMap = {
             new_owner: newOwnerAddress,
         }
-        const txHash = await ownerAccount.invoke(contract, 'update_owner', args)
+        const txHash = await ownerAccount.invoke(
+            contract,
+            'transfer_ownership',
+            args
+        )
+        const receipt = await starknet.getTransactionReceipt(txHash)
+        const events = await contract.decodeEvents(receipt.events)
+        expect(events).to.deep.equal([
+            {
+                name: 'ownership_transfer_requested',
+                data: {
+                    to: newOwnerAddress,
+                },
+            },
+        ])
+    })
+})
+
+describe('#accept_ownership', () => {
+    it('should fail with only pending owner can accept ownership', async () => {
+        try {
+            await ownerAccount.invoke(contract, 'accept_ownership')
+            expect.fail('should have failed')
+        } catch (error: any) {
+            expect(error.message).to.contain(
+                'only pending owner can accept ownership'
+            )
+        }
+    })
+
+    it('should pass, update owner and emit ownership_transferred', async () => {
+        const txHash = await newOwnerAccount.invoke(
+            contract,
+            'accept_ownership'
+        )
         const receipt = await starknet.getTransactionReceipt(txHash)
         const events = await contract.decodeEvents(receipt.events)
         expect(events).to.deep.equal([
             {
                 name: 'ownership_transferred',
                 data: {
-                    owner: newOwnerAddress,
+                    frm: ownerAddress,
+                    to: newOwnerAddress,
                 },
             },
         ])
-
         const resp = await contract.call('view_owner')
         expect(resp.owner).to.equal(newOwnerAddress)
         ownerDiff = true
@@ -119,6 +156,7 @@ describe('#set_measurement', () => {
             key: BigInt(1),
             measurement: {
                 value: BigInt(12345),
+                decimals: BigInt(6n),
                 timestamp: BigInt(11111),
             },
         }
@@ -138,6 +176,7 @@ describe('#set_measurement', () => {
             key: BigInt(1),
             measurement: {
                 value: BigInt(12345),
+                decimals: BigInt(6n),
                 timestamp: BigInt(11111),
             },
         }
@@ -155,6 +194,7 @@ describe('#set_measurement', () => {
                     key: 1n,
                     measurement: {
                         value: 12345n,
+                        decimals: 6n,
                         timestamp: 11111n,
                     },
                 },
@@ -166,6 +206,7 @@ describe('#set_measurement', () => {
         }
         const resp = await contract.call('get_measurement', a)
         expect(resp.measurement.value).to.equal(12345n)
+        expect(resp.measurement.decimals).to.equal(6n)
         expect(resp.measurement.timestamp).to.equal(11111n)
     })
 })
