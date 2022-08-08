@@ -3,7 +3,13 @@
 from starkware.cairo.common.cairo_builtins import HashBuiltin
 from starkware.cairo.common.math import assert_not_zero
 from starkware.starknet.common.syscalls import get_caller_address
-from contracts.utils import only_owner, init_owner, transfer_ownership, get_owner
+from contracts.utils import (
+    only_owner,
+    init_owner,
+    _transfer_ownership,
+    _accept_ownership,
+    get_owner,
+)
 
 # @title Oracle
 # @notice Fast oracle contract used to get crypto price updates
@@ -14,6 +20,7 @@ from contracts.utils import only_owner, init_owner, transfer_ownership, get_owne
 
 struct Info:
     member value : felt
+    member decimals : felt
     member timestamp : felt
 end
 
@@ -57,13 +64,22 @@ func view_owner{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_pt
     return (owner)
 end
 
-# @notice Update the contract owner
+# @notice Allows contract owner to begin transfer of contract ownership
 # @dev Only contract owner can update
+# @param new_owner The proposed new contract owner
 @external
-func update_owner{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+func transfer_ownership{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
     new_owner : felt
 ) -> ():
-    transfer_ownership(new_owner)
+    _transfer_ownership(new_owner)
+    return ()
+end
+
+# @notice Allows the contract ownership recipient to accept the transfer
+# @dev Only pending owner contract owner can call
+@external
+func accept_ownership{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}() -> ():
+    _accept_ownership()
     return ()
 end
 

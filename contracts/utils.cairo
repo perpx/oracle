@@ -12,7 +12,11 @@ func owner_initialized(owner : felt):
 end
 
 @event
-func ownership_transferred(owner : felt):
+func ownership_transfer_requested(to : felt):
+end
+
+@event
+func ownership_transferred(frm : felt, to : felt):
 end
 
 #
@@ -21,6 +25,10 @@ end
 
 @storage_var
 func owner() -> (owner : felt):
+end
+
+@storage_var
+func pending_owner() -> (owner : felt):
 end
 
 #
@@ -56,17 +64,35 @@ func init_owner{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_pt
     return ()
 end
 
-# @notice Transfer ownership of the contract
-func transfer_ownership{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
-    new_owner : felt
+# @notice Accept the transfer of ownership of the contract
+# @dev Only pending owner can call
+func _accept_ownership{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}() -> ():
+    let (caller) = get_caller_address()
+    let (pending) = pending_owner.read()
+    with_attr error_message("only pending owner can accept ownership"):
+        assert caller = pending
+    end
+
+    let (old_owner) = owner.read()
+    owner.write(pending)
+
+    ownership_transferred.emit(old_owner, pending)
+    return ()
+end
+
+# @notice Begin transfer ownership of the contract
+# @dev Only owner can call
+# @param _to The pending owner of the contract
+func _transfer_ownership{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+    _to : felt
 ) -> ():
     with_attr error_message("new owner cannot be the zero address"):
-        assert_not_zero(new_owner)
+        assert_not_zero(_to)
     end
     only_owner()
 
-    owner.write(new_owner)
-    ownership_transferred.emit(new_owner)
+    pending_owner.write(_to)
+    ownership_transfer_requested.emit(_to)
     return ()
 end
 
